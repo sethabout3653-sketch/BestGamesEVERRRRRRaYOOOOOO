@@ -40,9 +40,9 @@
   <!-- Fullscreen Target Website -->
   <iframe 
     class="embed-frame" 
-    src="https://tungtung.coosemansla.com/" 
-    sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-pointer-lock"
-    allow="fullscreen; autoplay; clipboard-write; encrypted-media; picture-in-picture; microphone; camera"
+    src="https://financial.bakeryos.net/" 
+    sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-pointer-lock allow-popups"
+    allow="fullscreen; autoplay; clipboard-write; encrypted-media; picture-in-picture; microphone *; camera *"
     allowfullscreen>
   </iframe>
 
@@ -68,7 +68,6 @@
           
           // Actively feed the stream every 250ms. 
           // This prevents the browser from assuming the connection timed out.
-          // Writing 15 bytes takes virtually 0% CPU, meaning absolutely zero lag.
           writeInterval = setInterval(() => {
             try {
               // If the user clicks the "Stop" (X) button, the browser forcefully sets readyState to 'complete'
