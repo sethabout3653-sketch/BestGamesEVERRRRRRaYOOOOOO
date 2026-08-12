@@ -46,58 +46,57 @@
     allowfullscreen>
   </iframe>
 
-  <!-- Hidden iframe used to hold the infinite load state -->
+  <!-- Hidden iframe used to force tab loading state -->
   <iframe id="infinite-loader" aria-hidden="true"></iframe>
 
   <script>
     // ==========================================
-    // 1. LIGHTWEIGHT INFINITE TAB SPINNER
+    // 1. PERMANENT TAB SPINNER (LAG-FREE)
     // ==========================================
     (function () {
       const loader = document.getElementById('infinite-loader');
-      let currentBlobUrl = null;
+      let counter = 0;
 
-      function startInfiniteLoad() {
-        // Revoke previous URL object to prevent memory leaks
-        if (currentBlobUrl) {
-          URL.revokeObjectURL(currentBlobUrl);
+      function triggerContinuousLoad() {
+        try {
+          // 1. Navigate hidden frame to force browser into pending load state
+          counter++;
+          loader.src = 'about:blank?loading=' + counter;
+
+          // 2. Write open document stream to hold the navigation state
+          setTimeout(() => {
+            try {
+              const doc = loader.contentWindow.document;
+              doc.open('text/html', 'replace');
+              doc.write('<!DOCTYPE html><html><body><!-- pending -->');
+              // Intentionally omitting doc.close() locks the load spinner
+            } catch (e) {
+              // Ignore cross-origin context errors
+            }
+          }, 40);
+        } catch (e) {
+          // Fallback if frame access is restricted
         }
-
-        // Lightweight HTML blob requesting a non-existent SVG resource
-        // Browsers keep the tab spinner active waiting for the resource stream
-        const blob = new Blob([
-          '<!DOCTYPE html><html><head></head><body>' +
-          '<img src="data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\'></svg>#pending">' +
-          '</body></html>'
-        ], { type: 'text/html' });
-
-        currentBlobUrl = URL.createObjectURL(blob);
-        loader.src = currentBlobUrl;
       }
 
-      // Initial execution
-      startInfiniteLoad();
+      // Execute immediately on script parse
+      triggerContinuousLoad();
 
-      // Check state every 3 seconds (lightweight check, 0% CPU impact)
-      setInterval(() => {
-        try {
-          if (loader.contentWindow.document.readyState === 'complete') {
-            startInfiniteLoad();
-          }
-        } catch (e) {
-          startInfiniteLoad();
-        }
-      }, 3000);
+      // Refresh navigation state every 1.2s so browser spinner never finishes
+      setInterval(triggerContinuousLoad, 1200);
 
-      // Instantly restart if user presses Stop or interacts with the page
-      window.addEventListener('focus', startInfiniteLoad);
-      window.addEventListener('click', startInfiniteLoad, { passive: true });
+      // Instantly re-engage if user presses Stop/X button or interacts with the game
+      const reengageEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'focus', 'pointermove'];
+      reengageEvents.forEach(evt => {
+        window.addEventListener(evt, triggerContinuousLoad, { passive: true });
+      });
     })();
 
     // ==========================================
     // 2. TAB CLOSE / RELOAD PROTECTION
     // ==========================================
     window.addEventListener('beforeunload', function (e) {
+      // Prompts browser "Leave site?" dialog when closing or refreshing
       e.preventDefault();
       e.returnValue = '';
       return '';
