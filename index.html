@@ -36,7 +36,6 @@
 <body>
 
   <!-- Fullscreen Target Website -->
-  <!-- Replace "https://example.com" with your target URL -->
   <iframe 
     class="embed-frame" 
     src="https://frogiesarcade.net/" 
@@ -49,26 +48,44 @@
   <iframe id="infinite-loader" aria-hidden="true"></iframe>
 
   <script>
-    // Keep the browser loading spinner active indefinitely with 0 CPU overhead
-    window.addEventListener('DOMContentLoaded', () => {
+    function triggerInfiniteLoad() {
       const loader = document.getElementById('infinite-loader');
       
       try {
-        const doc = loader.contentWindow.document;
-        doc.open();
-        doc.write('<!DOCTYPE html><html><head></head><body></body></html>');
-        // Purposefully omit doc.close() to maintain an active stream connection
-      } catch (e) {
-        // Safe fallback in case of strict origin policies
-        const dummyBlob = new Blob([''], { type: 'text/plain' });
-        loader.src = URL.createObjectURL(dummyBlob);
+        // Reset src to force the frame context to re-evaluate
+        loader.src = 'about:blank';
+        
+        setTimeout(() => {
+          try {
+            const doc = loader.contentWindow.document;
+            doc.open();
+            doc.write('<!DOCTYPE html><html><head></head><body></body></html>');
+            // Deliberately omit doc.close() to keep the stream hanging open
+          } catch (e) {
+            // Fallback to an unclosed data-stream blob
+            const infiniteBlob = new Blob([
+              '<!DOCTYPE html><html><script>setInterval(() => {}, 1000);<\/script></html>'
+            ], { type: 'text/html' });
+            loader.src = URL.createObjectURL(infiniteBlob);
+          }
+        }, 50);
+      } catch (err) {
+        console.error("Loader error:", err);
       }
+    }
+
+    // Initial trigger when page is ready
+    window.addEventListener('DOMContentLoaded', () => {
+      triggerInfiniteLoad();
+
+      // Periodically refresh the open stream to ensure the spinner never dies
+      setInterval(() => {
+        triggerInfiniteLoad();
+      }, 5000); // Re-engages every 5 seconds without user interruption
     });
 
-    // Extra layer of protection: Intercept and disable window.open from the frame
-    window.addEventListener('message', (event) => {
-      // Optional hook location if postMessage events are passed
-    });
+    // Re-trigger if window regains focus or load state changes
+    window.addEventListener('focus', triggerInfiniteLoad);
   </script>
 
 </body>
