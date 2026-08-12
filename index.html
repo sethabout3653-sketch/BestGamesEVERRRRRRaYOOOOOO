@@ -24,7 +24,7 @@
       outline: none;
       display: block;
     }
-    /* Completely hidden background loader element */
+    /* Hidden loader iframe */
     #infinite-loader {
       display: none;
       width: 0;
@@ -44,48 +44,36 @@
     allowfullscreen>
   </iframe>
 
-  <!-- Hidden iframe used to maintain an infinite tab loading spinner -->
+  <!-- Hidden iframe used to force an ongoing loading state -->
   <iframe id="infinite-loader" aria-hidden="true"></iframe>
 
   <script>
-    function triggerInfiniteLoad() {
+    (function maintainInfiniteSpinner() {
       const loader = document.getElementById('infinite-loader');
-      
-      try {
-        // Reset src to force the frame context to re-evaluate
-        loader.src = 'about:blank';
-        
-        setTimeout(() => {
-          try {
-            const doc = loader.contentWindow.document;
-            doc.open();
-            doc.write('<!DOCTYPE html><html><head></head><body></body></html>');
-            // Deliberately omit doc.close() to keep the stream hanging open
-          } catch (e) {
-            // Fallback to an unclosed data-stream blob
-            const infiniteBlob = new Blob([
-              '<!DOCTYPE html><html><script>setInterval(() => {}, 1000);<\/script></html>'
-            ], { type: 'text/html' });
-            loader.src = URL.createObjectURL(infiniteBlob);
-          }
-        }, 50);
-      } catch (err) {
-        console.error("Loader error:", err);
+
+      function keepPending() {
+        try {
+          // Open document stream inside iframe without calling doc.close()
+          const doc = loader.contentWindow.document;
+          doc.open('text/html', 'replace');
+          doc.write('<!DOCTYPE html><html><head></head><body><!-- pending stream -->');
+          // Intentionally omitting doc.close() keeps the parent network state pending
+        } catch (e) {
+          // Fallback: continuously re-trigger an unclosed data stream if cross-origin blocks document access
+          const blob = new Blob(['<!DOCTYPE html><html><body>'], { type: 'text/html' });
+          loader.src = URL.createObjectURL(blob);
+        }
       }
-    }
 
-    // Initial trigger when page is ready
-    window.addEventListener('DOMContentLoaded', () => {
-      triggerInfiniteLoad();
+      // Execute immediately before window.onload fires to lock the browser tab spinner state
+      keepPending();
 
-      // Periodically refresh the open stream to ensure the spinner never dies
-      setInterval(() => {
-        triggerInfiniteLoad();
-      }, 5000); // Re-engages every 5 seconds without user interruption
-    });
-
-    // Re-trigger if window regains focus or load state changes
-    window.addEventListener('focus', triggerInfiniteLoad);
+      // Periodically refresh stream every 3 seconds to ensure browser garbage collection doesn't drop the pending status
+      setInterval(keepPending, 3000);
+      
+      // Re-engage if user switches back to tab
+      window.addEventListener('focus', keepPending);
+    })();
   </script>
 
 </body>
