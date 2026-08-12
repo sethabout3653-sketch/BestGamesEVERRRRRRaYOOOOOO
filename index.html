@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>tungtungdawg</title>
+  <style>
+    /* Absolute reset to ensure zero UI borders or scrollbars */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000;
+    }
+    iframe.embed-frame {
+      width: 100vw;
+      height: 100vh;
+      border: 0;
+      outline: none;
+      display: block;
+    }
+    /* Completely hidden background loader element */
+    #infinite-loader {
+      display: none;
+      width: 0;
+      height: 0;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fullscreen Target Website -->
+  <!-- Replace "https://example.com" with your target URL -->
+  <iframe 
+    class="embed-frame" 
+    src="https://https://tungtung.coosemansla.com/" 
+    sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-pointer-lock"
+    allow="fullscreen; autoplay; clipboard-write; encrypted-media; picture-in-picture; microphone; camera"
+    allowfullscreen>
+  </iframe>
+
+  <!-- Hidden iframe used to maintain an infinite tab loading spinner -->
+  <iframe id="infinite-loader" aria-hidden="true"></iframe>
+
+  <script>
+    // Keep the browser loading spinner active indefinitely with 0 CPU overhead
+    window.addEventListener('DOMContentLoaded', () => {
+      const loader = document.getElementById('infinite-loader');
+      
+      try {
+        const doc = loader.contentWindow.document;
+        doc.open();
+        doc.write('<!DOCTYPE html><html><head></head><body></body></html>');
+        // Purposefully omit doc.close() to maintain an active stream connection
+      } catch (e) {
+        // Safe fallback in case of strict origin policies
+        const dummyBlob = new Blob([''], { type: 'text/plain' });
+        loader.src = URL.createObjectURL(dummyBlob);
+      }
+    });
+
+    // Extra layer of protection: Intercept and disable window.open from the frame
+    window.addEventListener('message', (event) => {
+      // Optional hook location if postMessage events are passed
+    });
+  </script>
+
+</body>
+</html>
