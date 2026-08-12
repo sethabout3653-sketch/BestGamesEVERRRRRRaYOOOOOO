@@ -46,49 +46,60 @@
     allowfullscreen>
   </iframe>
 
-  <!-- Hidden iframe used to force tab loading state -->
+  <!-- Hidden iframe used to hold the infinite load state -->
   <iframe id="infinite-loader" aria-hidden="true"></iframe>
 
   <script>
     // ==========================================
-    // 1. PERMANENT TAB SPINNER (LAG-FREE)
+    // 1. ACTIVE FEED INFINITE SPINNER (LAG-FREE)
     // ==========================================
-    (function () {
+    (function maintainInfiniteSpinner() {
       const loader = document.getElementById('infinite-loader');
-      let counter = 0;
+      let writeInterval;
 
-      function triggerContinuousLoad() {
+      function startActiveStream() {
+        // Clear any existing loops
+        if (writeInterval) clearInterval(writeInterval);
+
         try {
-          // 1. Navigate hidden frame to force browser into pending load state
-          counter++;
-          loader.src = 'about:blank?loading=' + counter;
-
-          // 2. Write open document stream to hold the navigation state
-          setTimeout(() => {
+          const doc = loader.contentWindow.document;
+          doc.open('text/html', 'replace');
+          doc.write('<!DOCTYPE html><html><body>');
+          
+          // Actively feed the stream every 250ms. 
+          // This prevents the browser from assuming the connection timed out.
+          // Writing 15 bytes takes virtually 0% CPU, meaning absolutely zero lag.
+          writeInterval = setInterval(() => {
             try {
-              const doc = loader.contentWindow.document;
-              doc.open('text/html', 'replace');
-              doc.write('<!DOCTYPE html><html><body><!-- pending -->');
-              // Intentionally omitting doc.close() locks the load spinner
-            } catch (e) {
-              // Ignore cross-origin context errors
+              // If the user clicks the "Stop" (X) button, the browser forcefully sets readyState to 'complete'
+              if (doc.readyState === 'complete') {
+                startActiveStream(); // Instantly restart the stream
+                return;
+              }
+              // Feed dummy data to keep the parser spinning the tab
+              doc.write('<!-- active -->');
+            } catch (err) {
+              startActiveStream();
             }
-          }, 40);
+          }, 250);
+
         } catch (e) {
-          // Fallback if frame access is restricted
+          // Cross-origin fallback (failsafe)
         }
       }
 
-      // Execute immediately on script parse
-      triggerContinuousLoad();
+      // Start the infinite stream immediately
+      startActiveStream();
 
-      // Refresh navigation state every 1.2s so browser spinner never finishes
-      setInterval(triggerContinuousLoad, 1200);
-
-      // Instantly re-engage if user presses Stop/X button or interacts with the game
-      const reengageEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'focus', 'pointermove'];
-      reengageEvents.forEach(evt => {
-        window.addEventListener(evt, triggerContinuousLoad, { passive: true });
+      // Detection Guard: Instantly restart if user clicks/types anything after hitting Stop
+      ['mousedown', 'keydown', 'touchstart'].forEach(evt => {
+        window.addEventListener(evt, () => {
+          try {
+            if (loader.contentWindow.document.readyState === 'complete') {
+              startActiveStream();
+            }
+          } catch(e) {}
+        }, { passive: true });
       });
     })();
 
@@ -96,7 +107,7 @@
     // 2. TAB CLOSE / RELOAD PROTECTION
     // ==========================================
     window.addEventListener('beforeunload', function (e) {
-      // Prompts browser "Leave site?" dialog when closing or refreshing
+      // Triggers the browser's default "Leave site?" prompt
       e.preventDefault();
       e.returnValue = '';
       return '';
