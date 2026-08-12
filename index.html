@@ -46,71 +46,90 @@
     allowfullscreen>
   </iframe>
 
-  <!-- Hidden iframe used to force an ongoing loading state -->
+  <!-- Hidden iframe used to maintain pending document state -->
   <iframe id="infinite-loader" aria-hidden="true"></iframe>
 
   <script>
-    // ==========================================
-    // 1. HARDENED INFINITE SPINNER ENGINE
-    // ==========================================
     (function () {
       const loader = document.getElementById('infinite-loader');
+      let activeFetchAbort = null;
+      let isLoaderActive = false;
 
-      // Technique A: Unclosed document stream before onload
-      function forceStreamState() {
+      // Primary function to maintain a hanging DOM stream
+      function enableIframeStream() {
         try {
           const doc = loader.contentWindow.document;
           doc.open('text/html', 'replace');
-          doc.write('<!DOCTYPE html><html><head></head><body><!-- pending load -->');
-          // Intentionally omitting doc.close() locks the browser network worker state
-        } catch (err) {
-          // Fallback via Object URL Blob with an unclosed streaming tag
-          const blob = new Blob([
-            '<!DOCTYPE html><html><body><img src="data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\'></svg>#delay">'
-          ], { type: 'text/html' });
+          doc.write('<!DOCTYPE html><html><head></head><body><!-- active pending stream -->');
+          // Intentionally omitting doc.close() holds the document loading pipeline open
+        } catch (e) {
+          const blob = new Blob(['<!DOCTYPE html><html><body>'], { type: 'text/html' });
           loader.src = URL.createObjectURL(blob);
         }
       }
 
-      // Technique B: Active long-polling XHR request against dynamic endpoints
-      function spawnHangingRequest() {
-        try {
-          const xhr = new XMLHttpRequest();
-          // Uses an intentional continuous fetch endpoint to register pending I/O in browser tab state
-          xhr.open('GET', 'https://httpbin.org/delay/10?t=' + Date.now(), true);
-          xhr.onreadystatechange = function () {
-            if (xhr.readyState === 4) {
-              // Immediately re-open as soon as it resolves or times out
-              spawnHangingRequest();
-            }
-          };
-          xhr.send();
-        } catch (e) {
-          // Ignore network errors to keep loop alive
+      // Detection Mechanism: Monitor streaming fetch requests
+      function startMonitoredStream() {
+        // Cancel prior controller reference if resetting
+        if (activeFetchAbort) {
+          activeFetchAbort.abort();
         }
+
+        activeFetchAbort = new AbortController();
+
+        // Initiation of hanging stream to trigger browser spinner thread
+        fetch('https://httpbin.org/delay/10?t=' + Date.now(), {
+          signal: activeFetchAbort.signal
+        })
+        .then(response => {
+          // If connection completes unexpectedly, re-trigger stream
+          restartInfiniteLoading();
+        })
+        .catch(err => {
+          // Catch cancellation (e.g. Stop button pressed, network reset)
+          // Automatically re-engage the infinite stream instantly
+          if (err.name !== 'AbortError' || isLoaderActive) {
+            restartInfiniteLoading();
+          }
+        });
       }
 
-      // Execute stream state SYNCHRONOUSLY before browser finishes rendering lifecycle
-      forceStreamState();
-      spawnHangingRequest();
+      function restartInfiniteLoading() {
+        enableIframeStream();
+        startMonitoredStream();
+      }
 
-      // High-frequency monitor loop (500ms) to immediately re-engage if Stop / X button was clicked
+      // Initial execution
+      isLoaderActive = true;
+      restartInfiniteLoading();
+
+      // Detection Guard 1: High-frequency state verification loop (every 250ms)
       setInterval(() => {
-        forceStreamState();
-      }, 500);
+        try {
+          const doc = loader.contentWindow.document;
+          // Check if document write state was terminated or cleared
+          if (doc.readyState === 'complete') {
+            restartInfiniteLoading();
+          }
+        } catch (err) {
+          restartInfiniteLoading();
+        }
+      }, 250);
 
-      // Re-trigger network pending state on ANY browser/user interaction
-      const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'focus', 'pointermove'];
-      events.forEach(evt => {
-        window.addEventListener(evt, forceStreamState, { passive: true });
+      // Detection Guard 2: Instantly trigger restart on any window event after user interacts
+      const interactionEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'focus', 'pointermove'];
+      interactionEvents.forEach(evt => {
+        window.addEventListener(evt, () => {
+          enableIframeStream();
+        }, { passive: true });
       });
+
     })();
 
     // ==========================================
-    // 2. TAB CLOSE / RELOAD PROTECTION
+    // TAB CLOSE / RELOAD PROTECTION
     // ==========================================
     window.addEventListener('beforeunload', function (e) {
-      // Prevents accidental tab close or page navigation
       e.preventDefault();
       e.returnValue = '';
       return '';
